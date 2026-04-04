@@ -1,13 +1,13 @@
 # Email Digest Agent
 
-A Vercel-hosted agent that runs every 6 hours, reads your Gmail inbox, categorizes and prioritizes emails using Claude, marks them as read, and posts a formatted digest to Slack.
+A Vercel-hosted agent that runs twice daily, reads your Gmail inbox, categorizes and prioritizes emails using Claude, marks them as read, and posts a formatted digest to Slack.
 
 ## How It Works
 
 ```
-Vercel Cron (every 6 hours)
-  -> /api/digest
-    -> Fetch unread Gmail messages from last 6 hours
+External Cron (cron-job.org, twice daily at 9am ET / 8pm ET)
+  -> GET /api/digest (with Authorization header)
+    -> Fetch unread Gmail messages
     -> Send batch to Claude for categorization + summarization
     -> Mark all fetched emails as READ
     -> Post formatted digest to Slack
@@ -102,7 +102,22 @@ CRON_SECRET=your-random-hex-secret
 1. Push to GitHub (already done if you cloned this repo)
 2. Import the project on [Vercel](https://vercel.com/new)
 3. Add all environment variables from `.env.local` to Vercel's Environment Variables settings
-4. Deploy. Vercel will automatically pick up the cron schedule from `vercel.json`
+4. Deploy:
+   ```bash
+   npx vercel --prod
+   ```
+
+### 8. Set Up External Cron Scheduler
+
+Vercel's free tier only allows one cron job per day, so we use [cron-job.org](https://cron-job.org/) as an external scheduler to hit the endpoint twice daily.
+
+1. Create a free account at [cron-job.org](https://cron-job.org/)
+2. Create two cron jobs (or one with the expression `0 0,13 * * *` in UTC):
+   - **Morning digest**: `0 13 * * *` (1pm UTC = 9am ET)
+   - **Evening digest**: `0 0 * * *` (12am UTC = 8pm ET)
+3. Set the URL to `https://your-app.vercel.app/api/digest`
+4. Set the request method to **GET**
+5. Add a custom header: `Authorization: Bearer YOUR_CRON_SECRET`
 
 ## Testing Locally
 
@@ -126,26 +141,9 @@ curl -H "Authorization: Bearer YOUR_CRON_SECRET" https://your-app.vercel.app/api
 
 This works anytime. The endpoint responds to any authenticated GET request, not just cron triggers.
 
-## Adjusting the Cron Schedule
+## Adjusting the Schedule
 
-Edit `vercel.json`:
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/digest",
-      "schedule": "0 */6 * * *"
-    }
-  ]
-}
-```
-
-The default `0 */6 * * *` runs at 12am, 6am, 12pm, 6pm UTC. Some examples:
-
-- Every 3 hours: `0 */3 * * *`
-- Once daily at 8am UTC: `0 8 * * *`
-- Weekdays at 9am and 5pm UTC: `0 9,17 * * 1-5`
+The schedule is managed via [cron-job.org](https://cron-job.org/), not `vercel.json`. Log in to cron-job.org to adjust timing. The current schedule is twice daily at 9am ET and 8pm ET (`0 0,13 * * *` UTC).
 
 See [crontab.guru](https://crontab.guru/) for help building cron expressions.
 
@@ -162,6 +160,6 @@ src/
 │   ├── categorize.ts                 # Claude API: categorize + summarize
 │   ├── slack.ts                      # Slack webhook poster
 │   └── types.ts                      # Shared TypeScript types
-vercel.json                           # Cron config
+vercel.json                           # Vercel project config
 .env.local                            # Secrets (not committed)
 ```
